@@ -2,12 +2,12 @@
   "name": "Figma Gradient Linear to CSS",
   "id": "1372671206451937478",
   "api": "1.0.0",
-  "main": "code.js",
+  "main": "dist/src/code/code.js",
   "capabilities": [],
   "enableProposedApi": false,
   "documentAccess": "dynamic-page",
   "editorType": ["figma"],
-  "ui": "ui.html",
+  "ui": "dist/src/ui/ui.html",
   "networkAccess": {
     "allowedDomains": ["none"]
   }
