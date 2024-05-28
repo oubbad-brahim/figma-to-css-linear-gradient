@@ -68,3 +68,10 @@ h6 {
 #__next {
   isolation: isolate;
 }
+
+/* Remove default styling from hyperlinks */
+
+a {
+  color: inherit;
+  text-decoration: inherit;
+}

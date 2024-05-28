@@ -1,91 +1,114 @@
-figma.showUI(__html__, { width: 300, height: 200 });
+import { decomposeTransform, rgbToCssString, rgbaToCssString } from "./utils";
+
+figma.showUI(__html__, { themeColors: true, width: 400, height: 200 });
+
+figma.loadAllPagesAsync();
+
+if (figma.currentPage.selection.length != 0) {
+  generateBackground();
+}
 
 figma.on("selectionchange", () => {
-  figma.currentPage.selection.forEach((node) => {
+  generateBackground();
+});
+
+figma.on("documentchange", () => {
+  generateBackground();
+});
+
+figma.ui.onmessage = (msg: { type: string; message: string }) => {
+  if (msg.type === "toast-message") {
+    figma.notify(msg.message);
+  }
+};
+
+function generateBackground() {
+  let background = "";
+
+  if (figma.currentPage.selection.length == 1) {
+    const node = figma.currentPage.selection[0];
     const minimalFillsMixin = node as MinimalFillsMixin;
     const fills = minimalFillsMixin.fills as Paint[];
 
-    fills.forEach((fill) => {
-      if (fill.type === "GRADIENT_LINEAR") {
-        const gradientTransform = fill.gradientTransform;
-        const colorStopsLastIndex = fill.gradientStops.length - 1;
-        const colorStops = fill.gradientStops.reduce(
-          (result, colorStop, index) => {
-            const color = colorStop.color;
-            const position = colorStop.position;
+    const filteredFills = [...fills]
+      .reverse()
+      .filter(
+        (fill) =>
+          fill.visible &&
+          (fill.type === "SOLID" || fill.type === "GRADIENT_LINEAR")
+      );
 
-            const rgba = rgbaToCssString(color);
-            const stop = Math.round(position * 100);
+    const fillsSize = filteredFills.length;
+    const fillsLastIndex = filteredFills.length - 1;
 
-            if (index === colorStopsLastIndex) {
-              return result + `${rgba} ${stop}%)`;
-            } else {
-              return result + `${rgba} ${stop}%, `;
-            }
-          },
-          ""
-        );
-        const { rotation, scale, translation } =
-          decomposeTransform(gradientTransform);
-        const deg = rotation.deg;
-        const linearGradient = `linear-gradient(${deg}deg, ${colorStops}`;
-        figma.ui.postMessage(linearGradient);
+    filteredFills.forEach((fill, index) => {
+      if (index === 0) {
+        background += "background:";
+      }
+
+      switch (fill.type) {
+        case "SOLID":
+          if (fillsSize === 1) background += ` ${getSolid(fill)}`;
+          else
+            background += ` linear-gradient(${getSolid(fill)}, ${getSolid(
+              fill
+            )})`;
+          break;
+        case "GRADIENT_LINEAR":
+          background += ` ${getGradientLinear(fill)}`;
+          break;
+
+        default:
+          break;
+      }
+
+      if (index === fillsLastIndex) {
+        background += ";";
+      } else {
+        background += ",";
       }
     });
-  });
-});
+  }
 
-interface DecomposedTransform {
-  translation: {
-    x: number;
-    y: number;
-  };
-  rotation: {
-    deg: number;
-  };
-  scale: {
-    x: number;
-    y: number;
-  };
+  figma.ui.postMessage(background);
 }
 
-function rgbaToCssString(color: RGBA): string {
-  const red = Math.round(color.r * 255);
-  const green = Math.round(color.g * 255);
-  const blue = Math.round(color.b * 255);
-  const alpha = Math.round(color.a * 100);
+function getGradientLinear(fill: GradientPaint): string {
+  const { gradientTransform, gradientStops, opacity } = fill;
 
-  return `rgba(${red}, ${green}, ${blue}, ${alpha}%)`;
+  const colorStopsSize = gradientStops.length;
+  const colorStopsLastIndex = gradientStops.length - 1;
+
+  if (colorStopsSize === 1) {
+    const color = gradientStops[0].color;
+    const rgba = rgbaToCssString(color, opacity);
+    console.log(rgba);
+
+    return `linear-gradient(${rgba}, ${rgba})`;
+  }
+
+  const colorStops = gradientStops.reduce((result, colorStop, index) => {
+    const color = colorStop.color;
+    const position = colorStop.position;
+
+    const rgba = rgbaToCssString(color, opacity);
+    const stop = Math.round(position * 100);
+
+    if (index === colorStopsLastIndex) {
+      return result + `${rgba} ${stop}%)`;
+    } else {
+      return result + `${rgba} ${stop}%, `;
+    }
+  }, "");
+
+  const { rotation } = decomposeTransform(gradientTransform);
+  const deg = rotation.deg;
+
+  return `linear-gradient(${deg}deg, ${colorStops}`;
 }
 
-function decomposeTransform(transform: Transform): DecomposedTransform {
-  const [[a, b, tx], [c, d, ty]] = transform;
-
-  const translation: [number, number] = [
-    Number(tx.toFixed(3)),
-    Number(ty.toFixed(3)),
-  ];
-
-  const scaleX = 1 / Math.sqrt(a * a + c * c);
-  const scaleY = 1 / Math.sqrt(b * b + d * d);
-  const rotationInRadians = Math.atan2(a, c) * 1;
-  const rotationInDegrees = radiansToDegrees(rotationInRadians);
-
-  return {
-    translation: {
-      x: translation[0],
-      y: translation[1],
-    },
-    rotation: {
-      deg: Number(rotationInDegrees.toFixed(3)),
-    },
-    scale: {
-      x: Number(scaleX.toFixed(0)),
-      y: Number(scaleY.toFixed(3)),
-    },
-  };
-}
-
-function radiansToDegrees(radians: number): number {
-  return radians * (180 / Math.PI);
+function getSolid(fill: SolidPaint): string {
+  const { color, opacity } = fill;
+  const rgb = rgbToCssString(color, opacity);
+  return rgb;
 }
